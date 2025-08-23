@@ -1,0 +1,204 @@
+categorization_task:
+  description: >
+    First, read the fetched emails from the file at 'output/fetched_emails.json' using the `FileReadTool`.
+    For each email in 'output/fetched_emails.json', analyze the body and categorize as follows:
+
+    1. Category (choose one intent):
+       - LOAN_EMI_PAID
+       - WILL_PAY
+       - UNABLE_TO_PAY
+       - SETTLEMENT_REQUEST
+       - OTHER
+
+    2. Priority (choose one):
+      IMPORTANT - BE VERY STRICT WITH PRIORITY LEVELS:
+      - HIGH: Urgent, needs immediate attention or response (WILL_PAY,SETTLEMENT_REQUEST)
+      - MEDIUM: Only LOAN_EMI_PAID can be MEDIUM.
+      - LOW: All others
+
+    3. Required Action (choose one):
+      - "REPLY" 
+      - "IGNORE"
+    
+    IMPORTANT FORMAT INSTRUCTIONS:
+    Your final answer must be a valid JSON object with these exact fields(example without the quotes):
+      "email_id": "The email's unique identifier",
+      "subject": "The email's subject line",
+      "sender": "The email sender",
+      "category": "The category you assigned",
+      "priority": "The priority you assigned",
+      "required_action": "The action needed",
+      "date": "The email date in YYYY-MM-DD format",
+      "age_days": "The age of the email in days"
+    
+    Do not include any explanations, thoughts, or additional text outside the JSON object.
+    Do not use markdown formatting or code blocks.
+    Just return the raw JSON object.
+  expected_output: >
+    A JSON object with email_id, subject, category, priority, and required_action fields for each emails'.
+  agent: categorizer
+  output_file: output/categorization_report.json
+
+organization_task:
+  description: >
+    First, read the categorization report from 'output/categorization_report.json' using the `FileReadTool`.
+    
+    For each email in 'output/categorization_report.json',
+
+    Use the categorization report to determine the correct labels.
+    
+    Star and label the email based on Category:
+    1. For WILL_PAY::
+       - Add "POSITIVE_CUSTOMER" label
+    
+    2. For UNABLE_TO_PAY:
+       - Add "NEGATIVE_CUSTOMER" label
+    
+    3.For SETTLEMENT_REQUEST:
+       - Add "SETTLEMENT_REQUEST" label
+       - Star the email
+
+    4.For LOAN_EMI_PAID:
+       - Add "PAID" label.
+
+    4. For other emails:
+       - OTHER
+      
+    Your final answer should be a JSON object with:
+    A JSON object with a key 'emails' containing a list of email object (email_id, subject, applied_labels, starred, and result) fields.
+    - email_id: The email's ID
+    - subject: The email's subject
+    - applied_labels: Label applied
+    - starred: True or False
+    - result: "Success" or error message
+
+    For each email, Use 'organize_email' tool to implement the label and star in Gmail.
+    
+  expected_output: >
+    A JSON object with a key 'emails' containing a list of email object (email_id, subject, applied_labels, starred, and result) fields.
+  agent: organizer
+  context: [categorization_task]
+  output_file: output/organization_report.json
+
+response_task:
+  description: >
+    First, read the emails you have to respond from 'output/fetched_emails.json' using the `FileReadTool`.
+    For each email in output/fetched_emails.json:
+    1. Get customer loan data using sender_email from `get_customer_data` tool
+    2. Draft personalized response based on loan history and email body
+    3. Your final answer should be a JSON object with:
+    4 JSON object with a key 'emails' containing list of email object 
+       - subject: "Re: " + original subject
+       - body: crafted response
+       - recipient: sender_email
+       - draft_saved: True or False
+    For each email, use 'save_email_draft' tool to implement Saving draft in gmail:
+  expected_output: >
+   A JSON object with a key 'emails' containing a list of email object (email_id,subject,recipient,draft_saved) fields for whom the email is drafted.
+  agent: response_generator
+  # output_file: output/response_report.json
+
+
+# response_task:
+#   description: |
+#     First, read the fetched emails from the file at 'output/fetched_emails.json' using the `FileReadTool`. 
+#     Extract sender_email in a list named sender_email_list. 
+#     Use `get_customer_data` with sender_email_list. 
+#     Based on the customer chat history from fetched emails and customer loan history from csv, 
+#     draft personalized, professional email responses that provide payment information, 
+#     address queries (e.g., EMI pending, settlement options), and guide the customer toward resolution.
+    
+#     For each unprocessed email in sender_email_list:
+#     - Use the 'save_email_draft' tool with:
+#       - subject: Add "Re: " to the original subject 
+#       - body: Personalized response
+#       - recipient: The sender_email
+#       - thread_info: Include thread info if available
+    
+#     After processing all emails, return:
+#     "Processed emails: [list of email addresses]"
+#   agent: response_generator
+#   expected_output: "List of processed email addresses"
+
+# notification_task:
+#   description: >
+#     Based on the categorization report, send Teams notifications for High priority emails and action needed using the 'TeamsNotificationTool'.
+    
+#     For each HIGH priority email:
+#     1. Create a brief summary of the email content
+#     2. Identify any action needed
+#     3. Create an attention-grabbing headline
+#     4. Add an emoji-filled intro
+    
+#     Use the 'TeamsNotificationTool' with:
+#     - subject: The email subject
+#     - sender: The email sender
+#     - category: The email category (, , etc.)
+#     - priority: HIGH
+#     - summary: Your brief summary
+#     - action_needed: What action is needed
+#     - headline: Your custom headline
+#     - intro: Your custom intro with emojis
+    
+#     Your final answer should list all notifications sent.
+#   expected_output: >
+#     A report of which emails had Teams notifications sent, including their subjects, priorities, and the creative elements used.
+#     The report should be in correct Markdown format without any additional text or formatting such as "```" or "```md".
+#   agent: notifier
+#   context: [categorization_task]
+#   output_file: output/notification_report.json
+
+# cleanup_task:
+#   description: >
+#     Based on the categorization report, identify LOW priority emails that are safe to delete.
+    
+#     EMAILS TO ARCHIVE INSTEAD OF DELETE:
+#     - ScreenShot or pdf of payment proof.    
+#     For these emails, use the 'GmailArchiveTool' instead of deleting them.
+    
+#     NEVER delete:
+#     - ANY email marked as HIGH or MEDIUM priority
+#     - ANY email from a personal contact
+#     - ANY email less than 5 days old
+    
+#     The emails already have their age calculated in the "age_days" field.
+#     An email is less than 5 days old if age_days < 5.
+    
+#     For each email:
+#     1. Check if it meets the deletion criteria (LOW priority AND not from criteria above)
+#     2. For emails you decide to delete, document:
+#        - The email subject and sender
+#        - The reason for deletion
+#        - Use the 'GmailDeleteTool' with the email_id and reason
+
+#     AFTER processing all emails for deletion:
+#     3. IMPORTANT: Use the 'empty_gmail_trash' tool to permanently empty the trash folder
+#        and free up storage space in the Gmail account.
+
+#     WORKFLOW:
+#     1. First, analyze each email one at a time
+#     2. For emails that should be deleted, use delete_email tool with ONLY the required fields
+#     3. After processing all emails, use empty_gmail_trash tool
+#     4. Then compile your final report
+
+#     Your final answer should provide a detailed report containing:
+#     - DELETED EMAILS: For each deleted email, include email_id, subject, sender, category, priority, age, and reason for deletion
+#     - PRESERVED EMAILS: For each preserved email, include email_id, subject, sender, category, priority, age, and reason for preservation
+#     - TRASH STATUS: Information about whether the trash was emptied successfully and how many messages were permanently removed
+#     Also include information about whether the trash was emptied successfully.
+
+#     IMPORTANT: When using the 'delete_email' tool, ONLY provide the email_id and reason 
+#     as a simple JSON object. For example:
+    
+#       "email_id": "123", 
+#       "reason": "Low priority promotional email"
+    
+#   expected_output: >
+#     A comprehensive deletion report with three sections:
+#     1. DELETED EMAILS: Full details of each deleted email including subject, sender, id, category, priority, age and deletion reason
+#     2. PRESERVED EMAILS: Full details of each preserved email including the reason for preservation
+#     3. TRASH STATUS: Results of the trash emptying operation including number of messages permanently removed
+#     The report should be in JSON format for easy parsing and tracking.
+#   agent: cleaner
+#   context: [categorization_task, organization_task]
+#   output_file: output/cleanup_report.json
