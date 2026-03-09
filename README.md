@@ -4,6 +4,12 @@ AI-powered email automation system for debt recovery and customer communication 
 
 ## Overview
 
+
+https://github.com/user-attachments/assets/85d2fa59-77e5-4116-8334-78a427c93b01
+
+
+
+
 Automated email processing system that categorizes, organizes, and generates personalized responses to customer emails regarding loan EMI payments. Uses multi-agent AI architecture with AWS Claude models.
 
 ## Features
